@@ -9,9 +9,9 @@ public class QueryUtils {
 
     public static PreparedStatement extractTablesStatement(Connection connection, String schema) throws SQLException {
             //extracts all tables that don't have composite primary key
-            PreparedStatement tableStatement = connection.prepareStatement("    SELECT table_name\n" +
+            PreparedStatement tableStatement = connection.prepareStatement("SELECT table_name\n" +
                                             "FROM information_schema.tables\n" +
-                                            "WHERE table_schema = ?\n" +
+                                            "WHERE table_schema = ? AND TABLE_TYPE = 'BASE TABLE' \n" +
                                             "  AND table_name NOT IN (\n" +
                                             "    SELECT tc.table_name\n" +
                                             "    FROM information_schema.table_constraints tc\n" +
@@ -33,7 +33,7 @@ public class QueryUtils {
 
 
     // Get the ResultSet containing column metadata
-    //extracts tables and columns that are not foreign keys and not manytomany tables
+    //extracts columns that are not foreign keys and not manytomany tables
     public static PreparedStatement extractTableColumns(Connection connection, String schema, String tableName) throws SQLException {
         PreparedStatement preparedStatement = connection.prepareStatement("SELECT DISTINCT c.table_name, c.column_name, c.data_type, c.column_key \n" +
                 "FROM INFORMATION_SCHEMA.COLUMNS c\n" +
@@ -63,7 +63,7 @@ public class QueryUtils {
     public static PreparedStatement extractForeignConstraints(Connection connection, String schema, String tableName) throws SQLException {
 
         PreparedStatement preparedStatement = connection.prepareStatement(
-                "SELECT 'ManyToOne' AS relationship_type, kcu.*\n" +
+                "SELECT 'ManyToOne' AS relationship_type, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, kcu.COLUMN_NAME, kcu.TABLE_NAME\n" +
                     "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu\n" +
                     "WHERE kcu.TABLE_SCHEMA = ? \n" +
                     "    AND kcu.TABLE_NAME = ? \n" +
@@ -77,7 +77,7 @@ public class QueryUtils {
                     "            AND TABLE_NAME = kcu.REFERENCED_TABLE_NAME\n" +
                     "    )\n" +
                     "    UNION\n" +
-                    "      SELECT 'OneToOne' AS relationship_type, kcu.*\n" +
+                    "      SELECT 'OneToOne' AS relationship_type, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, kcu.COLUMN_NAME, kcu.TABLE_NAME\n" +
                     "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu\n" +
                     "WHERE kcu.TABLE_SCHEMA = ? \n" +
                     "    AND kcu.TABLE_NAME = ? \n" +
@@ -90,7 +90,7 @@ public class QueryUtils {
                     "            AND REFERENCED_TABLE_NAME = kcu.TABLE_NAME\n" +
                     "    )\n" +
                     "UNION\n" +
-                    "    SELECT 'OneToMany' AS relationship_type, kcu.*\n" +
+                    "    SELECT 'OneToMany' AS relationship_type, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, kcu.COLUMN_NAME, kcu.TABLE_NAME\n" +
                     "    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu\n" +
                     "WHERE kcu.TABLE_SCHEMA = ? \n" +
                     "AND kcu.TABLE_NAME != ? \n" +
@@ -115,7 +115,7 @@ public class QueryUtils {
                     "    HAVING COUNT(*) >= 2\n" +
                     "  )" +
                     "UNION\n" +
-                    "SELECT 'ManyToMany' AS relationship_type, kcu.*\n" +
+                    "SELECT 'ManyToMany' AS relationship_type, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, kcu.COLUMN_NAME, kcu.TABLE_NAME\n" +
                     "    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu\n" +
                     "WHERE kcu.TABLE_SCHEMA = ? \n" +
                     "        AND kcu.TABLE_NAME != ? \n" +

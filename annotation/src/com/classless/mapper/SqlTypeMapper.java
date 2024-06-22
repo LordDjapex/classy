@@ -54,6 +54,7 @@ public class SqlTypeMapper {
 
             // Enumeration types
             case ENUM:
+            case GEOMETRY:
             case SET:
                 return "String"; // Assuming MySQL ENUM and SET are mapped to Java String
 

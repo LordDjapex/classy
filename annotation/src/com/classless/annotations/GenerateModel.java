@@ -8,10 +8,4 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.TYPE)
 public @interface GenerateModel {
-
-    String databaseUrl();
-    String[] exclude() default {};
-    boolean annotateJPA() default false;
-    boolean generateDTOs() default false;
-
 }

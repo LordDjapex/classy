@@ -34,5 +34,6 @@ public enum SqlColumnTypes {
 
     // Enumeration types
     ENUM,
-    SET
+    SET,
+    GEOMETRY
 }

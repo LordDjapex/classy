@@ -17,8 +17,8 @@ import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -29,39 +29,49 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 import static com.classless.mapper.SqlTypeMapper.mapSqlTypeToJavaType;
 
 public class ClasslessProcessor extends AbstractProcessor {
 
-    //next step, check onetoone, onetomany, manytoone, manytomany
-
-    public static final String URL = "jdbc:mysql://localhost:3306/classless";
-    public static final String SCHEMA = URL.split("/")[URL.split("/").length - 1]; //extract schema from URL
-    public static final String USERNAME = "root";
-    public static final String PASSWORD = "password";
-    public static Connection connection = null;
-
-    public static final String LOMBOK_DATA_IMPORT = "import lombok.Data;";
-    public static final String LOMBOK_NOARGSCONSTRUCTOR_IMPORT = "import lombok.NoArgsConstructor;";
+    //   public static String[] exclude;
+    String URL;
+    String SCHEMA; //extract schema from URL
+    String USERNAME;
+    String PASSWORD;
+    boolean annotateJPA;
+    boolean generateDTOs;
+    Connection connection = null;
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "TEST WARNING");
 
         try {
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"Connecting database...");
             java.lang.Class.forName("com.mysql.cj.jdbc.Driver");
-            connection = DriverManager.getConnection(URL, USERNAME, PASSWORD);
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"Database connected!");
-
             for (Element element : roundEnv.getElementsAnnotatedWith(GenerateModel.class)) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, element.getSimpleName().toString().toLowerCase());
-                DatabaseMetaData metaData = connection.getMetaData();
+                Properties prop = new Properties();
+
+                try (InputStream input = getClass().getClassLoader().getResourceAsStream("db_connect.properties")) {
+                    prop.load(input);
+                    URL = prop.getProperty("db.url");
+                    SCHEMA = prop.getProperty("db.schema");
+                    USERNAME = prop.getProperty("db.username");
+                    PASSWORD = prop.getProperty("db.password");
+                    annotateJPA = Boolean.parseBoolean(prop.getProperty("classy.annotateJPA"));
+                    generateDTOs = Boolean.parseBoolean(prop.getProperty("classy.generateDTOs"));
+                    //    exclude = annotation.exclude();
+                } catch (Exception e) {
+                    throw e;
+                }
+
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"Connecting database...");
+                connection = DriverManager.getConnection(URL, USERNAME, PASSWORD);
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"Database connected!");
 
                 PreparedStatement tableStatement = QueryUtils.extractTablesStatement(connection, SCHEMA);
-
                 ResultSet tablesResultSet = tableStatement.executeQuery();
 
                 while (tablesResultSet.next()) {
@@ -71,7 +81,6 @@ public class ClasslessProcessor extends AbstractProcessor {
                     createClass(tableName, resultSet,  element);
                 }
             }
-
 
         } catch (Exception e) {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,"Cannot connect the database!");
@@ -93,7 +102,6 @@ public class ClasslessProcessor extends AbstractProcessor {
     private JavaFileObject createClass(String name, ResultSet resultSet, Element element) throws IOException, SQLException {
         JavaFileObject ourClass = null;
         BufferedWriter bufferedWriter = null;
-       // PackageElement packageElement = (PackageElement)element.getEnclosingElement();
         String className = StringUtils.transferTableNameIntoClassName(name);
         ourClass = processingEnv.getFiler().createSourceFile(className);
 
@@ -105,9 +113,7 @@ public class ClasslessProcessor extends AbstractProcessor {
 
         //package
         bufferedWriter = new BufferedWriter(ourClass.openWriter());
-        bufferedWriter.append("package ");
-        bufferedWriter.append("com.experiment");
-        bufferedWriter.append(";");
+        bufferedWriter.append("package classy.model;");
         bufferedWriter.newLine();
 
         //imports and class annotations
@@ -115,7 +121,7 @@ public class ClasslessProcessor extends AbstractProcessor {
         bufferedWriter.newLine();
         bufferedWriter.append("import lombok.Data;");
         bufferedWriter.newLine();
-        if (element.getAnnotation(JPAAnnotations.class) != null) {
+        if (annotateJPA) {
             bufferedWriter.append("import jakarta.persistence.*;");
             bufferedWriter.newLine();
         }
@@ -132,7 +138,7 @@ public class ClasslessProcessor extends AbstractProcessor {
 
         bufferedWriter.append("@Data");
         bufferedWriter.newLine();
-        if (element.getAnnotation(JPAAnnotations.class) != null) {
+        if (annotateJPA) {
             bufferedWriter.append("@Entity");
             bufferedWriter.newLine();
             bufferedWriter.append("@Table(name = \"" + name + "\")");
@@ -147,7 +153,7 @@ public class ClasslessProcessor extends AbstractProcessor {
         bufferedWriter.newLine();
 
         for (String field :primaryKeyField) {
-            if (element.getAnnotation(JPAAnnotations.class) != null) {
+            if (annotateJPA) {
                 bufferedWriter.append("@Id");
                 bufferedWriter.newLine();
                 bufferedWriter.append("@GeneratedValue(strategy = GenerationType.IDENTITY)");
@@ -161,7 +167,7 @@ public class ClasslessProcessor extends AbstractProcessor {
 
         //adding fields
         for (String field : fields) {
-            if (element.getAnnotation(JPAAnnotations.class) != null) {
+            if (annotateJPA) {
                 bufferedWriter.append("@Column(name = \"" + StringUtils.convertCamelToSnake(field.split(" ")[1]) + "\")");
                 bufferedWriter.newLine();
             }
@@ -180,11 +186,9 @@ public class ClasslessProcessor extends AbstractProcessor {
             String relationshipType = entry.getKey();
             List<ForeignKeyMetaData> foreignFields = entry.getValue();
             for (ForeignKeyMetaData foreignKeyMetaData : foreignFields) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,foreignKeyMetaData.toString());
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "" + element.getAnnotation(JPAAnnotations.class));
                 switch (relationshipType) {
                     case "OneToOne":
-                        if (element.getAnnotation(JPAAnnotations.class) != null) {
+                        if (annotateJPA) {
                             bufferedWriter.append("@OneToOne");
                             bufferedWriter.newLine();
                             bufferedWriter.append("@JoinColumn(name = \"" + foreignKeyMetaData.getColumnName() + "\")");
@@ -196,7 +200,7 @@ public class ClasslessProcessor extends AbstractProcessor {
                         bufferedWriter.newLine();
                         break;
                     case "ManyToOne":
-                        if (element.getAnnotation(JPAAnnotations.class) != null) {
+                        if (annotateJPA) {
                             bufferedWriter.append("@ManyToOne");
                             bufferedWriter.newLine();
                             bufferedWriter.append("@JoinColumn(name = \"" + foreignKeyMetaData.getColumnName() + "\")");
@@ -206,7 +210,7 @@ public class ClasslessProcessor extends AbstractProcessor {
                         bufferedWriter.newLine();
                         break;
                     case "OneToMany":
-                        if (element.getAnnotation(JPAAnnotations.class) != null) {
+                        if (annotateJPA) {
                             bufferedWriter.append("@OneToMany(mappedBy =\"" + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName()) + "\")");
                             bufferedWriter.newLine();
                         }
@@ -215,7 +219,7 @@ public class ClasslessProcessor extends AbstractProcessor {
                         bufferedWriter.newLine();
                         break;
                     case "ManyToMany":
-                        if (element.getAnnotation(JPAAnnotations.class) != null) {
+                        if (annotateJPA) {
                             bufferedWriter.append("@ManyToMany");
                             bufferedWriter.newLine();
                             bufferedWriter.append("@JoinTable(name = \"" + foreignKeyMetaData.getTableName() +
@@ -238,7 +242,7 @@ public class ClasslessProcessor extends AbstractProcessor {
         bufferedWriter.append("}");
         bufferedWriter.close();
 
-        if (element.getAnnotation(GenerateDTO.class) != null) {
+        if (generateDTOs) {
             createDTOClass(className, neededImports, fields, primaryKeyField, foreignKeys);
         }
 
@@ -321,14 +325,12 @@ public class ClasslessProcessor extends AbstractProcessor {
 
         JavaFileObject ourClass = null;
         BufferedWriter bufferedWriter = null;
-        // PackageElement packageElement = (PackageElement)element.getEnclosingElement();
         className = StringUtils.capitalize(className);
         ourClass = processingEnv.getFiler().createSourceFile(className + "DTO");
 
         //package
         bufferedWriter = new BufferedWriter(ourClass.openWriter());
-        bufferedWriter.append("package ");
-        bufferedWriter.append("com.experiment.dto;");
+        bufferedWriter.append("package classy.dto;");
         bufferedWriter.newLine();
 
         //imports and class annotations
@@ -344,7 +346,7 @@ public class ClasslessProcessor extends AbstractProcessor {
         bufferedWriter.newLine();
         bufferedWriter.append("import java.sql.*;");
         bufferedWriter.newLine();
-        bufferedWriter.append("import com.experiment.*;");
+        bufferedWriter.append("import classy.model.*;");
         bufferedWriter.newLine();
         bufferedWriter.newLine();
 
@@ -403,9 +405,7 @@ public class ClasslessProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return new HashSet<>(Arrays.asList("com.classless.annotations.Class",
-                                            "com.classless.annotations.JPAAnnotations",
-                                            "com.classless.annotations.GenerateDTO"));
+        return new HashSet<>(Arrays.asList("com.classless.annotations.GenerateModel"));
     }
 
     @Override

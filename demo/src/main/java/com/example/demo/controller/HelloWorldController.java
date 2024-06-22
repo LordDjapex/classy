@@ -28,12 +28,12 @@ public class HelloWorldController {
     }
 
     @PostMapping("/brat")
-    public com.experiment.Brat createBrat(@RequestBody com.experiment.Brat brat) {
+    public classy.model.Brat createBrat(@RequestBody classy.model.Brat brat) {
         return bratRepository.save(brat);
     }
 
     @GetMapping("/brat")
-    public List<com.experiment.dto.BratDTO> getBrats() {
+    public List<classy.dto.BratDTO> getBrats() {
         return bratRepository.findAll().stream().map(b -> bratService.convertToDto(b)).collect(Collectors.toList());
     }
 
