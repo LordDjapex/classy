@@ -1,8 +1,6 @@
 package com.classless;
 
 import com.classless.annotations.GenerateModel;
-import com.classless.annotations.GenerateDTO;
-import com.classless.annotations.JPAAnnotations;
 import com.classless.enums.SqlColumnTypes;
 import com.classless.template.ForeignKeyMetaData;
 import com.classless.utils.QueryUtils;
@@ -49,9 +47,9 @@ public class ClasslessProcessor extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "TEST WARNING");
 
-        try {
-            java.lang.Class.forName("com.mysql.cj.jdbc.Driver");
-            for (Element element : roundEnv.getElementsAnnotatedWith(GenerateModel.class)) {
+        if (!roundEnv.getElementsAnnotatedWith(GenerateModel.class).isEmpty()) {
+            try {
+                java.lang.Class.forName("com.mysql.cj.jdbc.Driver");
                 Properties prop = new Properties();
 
                 try (InputStream input = getClass().getClassLoader().getResourceAsStream("db_connect.properties")) {
@@ -78,20 +76,21 @@ public class ClasslessProcessor extends AbstractProcessor {
                     String tableName = tablesResultSet.getString("TABLE_NAME");
                     PreparedStatement preparedStatement = QueryUtils.extractTableColumns(connection, SCHEMA, tableName);
                     ResultSet resultSet = preparedStatement.executeQuery();
-                    createClass(tableName, resultSet,  element);
+                    createClass(tableName, resultSet);
                 }
-            }
 
-        } catch (Exception e) {
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,"Cannot connect the database!");
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,e.toString());
-        } finally {
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"Closing the connection.");
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException ignore) {
+            } catch (Exception e) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,"Cannot connect the database!");
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,e.toString());
+                return false;
+            } finally {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"Closing the connection.");
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException ignore) {
 
+                    }
                 }
             }
         }
@@ -99,21 +98,21 @@ public class ClasslessProcessor extends AbstractProcessor {
             return true;
     }
 
-    private JavaFileObject createClass(String name, ResultSet resultSet, Element element) throws IOException, SQLException {
+    private JavaFileObject createClass(String name, ResultSet resultSet) throws IOException, SQLException {
         JavaFileObject ourClass = null;
         BufferedWriter bufferedWriter = null;
         String className = StringUtils.transferTableNameIntoClassName(name);
         ourClass = processingEnv.getFiler().createSourceFile(className);
 
-        List<List<String>> fieldsAndImports = extractFieldsAndImports(resultSet);
+        List<List<String>> fields = extractFields(resultSet);
 
-        List<String> neededImports = fieldsAndImports.get(0);
-        List<String> fields = fieldsAndImports.get(1);
-        List<String> primaryKeyField = fieldsAndImports.get(2);
+        List<String> otherFields = fields.get(0);
+        List<String> primaryKeyField = fields.get(1);
 
         //package
         bufferedWriter = new BufferedWriter(ourClass.openWriter());
         bufferedWriter.append("package classy.model;");
+        bufferedWriter.newLine();
         bufferedWriter.newLine();
 
         //imports and class annotations
@@ -121,15 +120,13 @@ public class ClasslessProcessor extends AbstractProcessor {
         bufferedWriter.newLine();
         bufferedWriter.append("import lombok.Data;");
         bufferedWriter.newLine();
+        bufferedWriter.append("import java.sql.*;");
+        bufferedWriter.newLine();
         if (annotateJPA) {
             bufferedWriter.append("import jakarta.persistence.*;");
             bufferedWriter.newLine();
         }
-        for (String neededImport : neededImports) {
-            bufferedWriter.append("import " + neededImport + ";");
-            bufferedWriter.newLine();
-        }
-        //experimental
+
         bufferedWriter.append("import com.fasterxml.jackson.annotation.*;");
         bufferedWriter.newLine();
 
@@ -161,25 +158,24 @@ public class ClasslessProcessor extends AbstractProcessor {
                 bufferedWriter.append("@Column(name = \"" + StringUtils.convertCamelToSnake(field.split(" ")[1]) + "\")");
                 bufferedWriter.newLine();
             }
-            bufferedWriter.append("private " + field + ";");
+            bufferedWriter.append("private " + StringUtils.transferColumnNameIntoFieldName(field, false) + ";");
             bufferedWriter.newLine();
         }
 
         //adding fields
-        for (String field : fields) {
+        for (String field : otherFields) {
             if (annotateJPA) {
                 bufferedWriter.append("@Column(name = \"" + StringUtils.convertCamelToSnake(field.split(" ")[1]) + "\")");
                 bufferedWriter.newLine();
             }
-            bufferedWriter.append("private " + field + ";");
+            bufferedWriter.append("private " + StringUtils.transferColumnNameIntoFieldName(field, false) + ";");
             bufferedWriter.newLine();
         }
-        //adding foreign key fields
 
+        //adding foreign key fields
         /*
             TableName refers to table that references another table
-            In case of OneToMany, we need to have tableName in order to actually know which table we having in our List
-
+            In case of OneToMany, we need to have tableName in order to actually know which table we should have in our List
          */
         HashMap<String, List<ForeignKeyMetaData>> foreignKeys = extractForeignKeys(name);
         for (Map.Entry<String, List<ForeignKeyMetaData>> entry : foreignKeys.entrySet()) {
@@ -196,7 +192,7 @@ public class ClasslessProcessor extends AbstractProcessor {
                             bufferedWriter.append("@JsonIgnore");
                             bufferedWriter.newLine();
                         }
-                        bufferedWriter.append("private " + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName()) + ";");
+                        bufferedWriter.append("private " + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
                     case "ManyToOne":
@@ -206,16 +202,16 @@ public class ClasslessProcessor extends AbstractProcessor {
                             bufferedWriter.append("@JoinColumn(name = \"" + foreignKeyMetaData.getColumnName() + "\")");
                             bufferedWriter.newLine();
                         }
-                        bufferedWriter.append("private " + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName()) + ";");
+                        bufferedWriter.append("private " + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
                     case "OneToMany":
                         if (annotateJPA) {
-                            bufferedWriter.append("@OneToMany(mappedBy =\"" + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName()) + "\")");
+                            bufferedWriter.append("@OneToMany(mappedBy =\"" + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), false) + "\")");
                             bufferedWriter.newLine();
                         }
                         bufferedWriter.append("private List<" + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getTableName()) + "> " +
-                                StringUtils.transferColumnNameIntoPluralFieldName(foreignKeyMetaData.getTableName()) + ";");
+                                StringUtils.transferColumnNameIntoPluralFieldName(foreignKeyMetaData.getTableName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
                     case "ManyToMany":
@@ -229,7 +225,7 @@ public class ClasslessProcessor extends AbstractProcessor {
 
                         }
                         bufferedWriter.append("private List<" + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "> " +
-                                                                    StringUtils.transferColumnNameIntoPluralFieldName(foreignKeyMetaData.getTableName()) + ";");
+                                                                    StringUtils.transferColumnNameIntoPluralFieldName(foreignKeyMetaData.getTableName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
                 }
@@ -237,24 +233,21 @@ public class ClasslessProcessor extends AbstractProcessor {
             }
         }
 
-
-
         bufferedWriter.append("}");
         bufferedWriter.close();
 
         if (generateDTOs) {
-            createDTOClass(className, neededImports, fields, primaryKeyField, foreignKeys);
+            createDTOClass(className, otherFields, primaryKeyField, foreignKeys);
         }
 
         return ourClass;
     }
 
 
-    private List<List<String>> extractFieldsAndImports(ResultSet resultSet) throws SQLException {
+    private List<List<String>> extractFields(ResultSet resultSet) throws SQLException {
         List<List<String>> ultimateList = new ArrayList<>();
         List<String> primaryKeyField = new ArrayList<>();
         List<String> fields = new ArrayList<>();
-        List<String> imports = new ArrayList<>();
         while (resultSet.next()) {
             String columnName = resultSet.getString("COLUMN_NAME");
             String dataType = resultSet.getString("DATA_TYPE").toUpperCase();
@@ -263,24 +256,13 @@ public class ClasslessProcessor extends AbstractProcessor {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "Name: " + columnName + ", Type: " + dataType);
 
             String columnJavaType = determineType(dataType);
-            if (columnJavaType.contains(".")) {
-                imports.add(columnJavaType);
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, columnJavaType.toString());
-                if (columnKey.equals("PRI")) {
-                    primaryKeyField.add(columnJavaType.split("\\.")[columnJavaType.split("\\.").length - 1] + " " + columnName);
-                } else {
-                    fields.add(columnJavaType.split("\\.")[columnJavaType.split("\\.").length - 1] + " " + columnName); //adds field type and field name
-                }
+            if (columnKey.equals("PRI")) {
+                primaryKeyField.add(columnJavaType + " " + columnName);
             } else {
-                if (columnKey.equals("PRI")) {
-                    primaryKeyField.add(columnJavaType + " " + columnName);
-                } else {
-                    fields.add(columnJavaType + " " + columnName);
-                }
+                fields.add(columnJavaType + " " + columnName);
             }
         }
 
-        ultimateList.add(imports);
         ultimateList.add(fields);
         ultimateList.add(primaryKeyField);
 
@@ -318,7 +300,7 @@ public class ClasslessProcessor extends AbstractProcessor {
 
     }
 
-    private void createDTOClass(String className, List<String> neededImports, List<String> fields,
+    private void createDTOClass(String className, List<String> fields,
                                                 List<String> primaryKeyField,
                                                 HashMap<String, List<ForeignKeyMetaData>> foreignKeys)
                                                 throws IOException {
@@ -332,17 +314,12 @@ public class ClasslessProcessor extends AbstractProcessor {
         bufferedWriter = new BufferedWriter(ourClass.openWriter());
         bufferedWriter.append("package classy.dto;");
         bufferedWriter.newLine();
+        bufferedWriter.newLine();
 
         //imports and class annotations
         bufferedWriter.append("import java.util.List;");
         bufferedWriter.newLine();
-        bufferedWriter.append("import lombok.Data;");
-        bufferedWriter.newLine();
-        bufferedWriter.append("import lombok.Builder;");
-        bufferedWriter.newLine();
-        bufferedWriter.append("import lombok.NoArgsConstructor;");
-        bufferedWriter.newLine();
-        bufferedWriter.append("import lombok.AllArgsConstructor;");
+        bufferedWriter.append("import lombok.*;");
         bufferedWriter.newLine();
         bufferedWriter.append("import java.sql.*;");
         bufferedWriter.newLine();
@@ -367,12 +344,12 @@ public class ClasslessProcessor extends AbstractProcessor {
         bufferedWriter.newLine();
 
         for (String field : primaryKeyField) {
-            bufferedWriter.append("private " + field + ";");
+            bufferedWriter.append("private " + StringUtils.transferColumnNameIntoFieldName(field, false) + ";");
             bufferedWriter.newLine();
         }
 
         for (String field : fields) {
-            bufferedWriter.append("private " + field + ";");
+            bufferedWriter.append("private " + StringUtils.transferColumnNameIntoFieldName(field, false) + ";");
             bufferedWriter.newLine();
         }
 
@@ -383,13 +360,13 @@ public class ClasslessProcessor extends AbstractProcessor {
                 switch (relationshipType) {
                     case "OneToOne":
                     case "ManyToOne":
-                        bufferedWriter.append("private " + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "DTO" + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName()) + ";");
+                        bufferedWriter.append("private " + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "DTO" + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
                     case "OneToMany":
                     case "ManyToMany":
                         bufferedWriter.append("private List<" + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "DTO" + "> " +
-                                StringUtils.transferColumnNameIntoPluralFieldName(foreignKeyMetaData.getTableName()) + ";");
+                                StringUtils.transferColumnNameIntoPluralFieldName(foreignKeyMetaData.getTableName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
                 }
@@ -398,9 +375,6 @@ public class ClasslessProcessor extends AbstractProcessor {
 
         bufferedWriter.append("}");
         bufferedWriter.close();
-
-
-
     }
 
     @Override

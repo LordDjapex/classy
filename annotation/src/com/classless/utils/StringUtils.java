@@ -20,7 +20,7 @@ public class StringUtils {
         return result.toString().trim();
     }
 
-    public static String transferColumnNameIntoFieldName(String columnName) {
+    public static String transferColumnNameIntoFieldName(String columnName, boolean isForeignColumn) {
         String[] words = columnName.split("_");
         String fieldName = "";
         for (String word : words) {
@@ -32,7 +32,7 @@ public class StringUtils {
         }
 
         //if column name ends with Id, it shouldn't be there
-        if (fieldName.endsWith("Id")) {
+        if (fieldName.endsWith("Id") && isForeignColumn) {
             return fieldName.substring(0, fieldName.length() - 2);
         }
 
@@ -65,7 +65,7 @@ public class StringUtils {
         return result.toString();
     }
 
-    public static String transferColumnNameIntoPluralFieldName(String columnName) {
-        return transferColumnNameIntoFieldName(columnName) + "s";
+    public static String transferColumnNameIntoPluralFieldName(String columnName, boolean isForeignColumn) {
+        return transferColumnNameIntoFieldName(columnName, isForeignColumn) + "s";
     }
 }
