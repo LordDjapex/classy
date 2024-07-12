@@ -33,6 +33,8 @@ import static com.classy.mapper.SqlTypeMapper.mapSqlTypeToJavaType;
 
 public class ClasslessProcessor extends AbstractProcessor {
 
+    private static final String CLASSY_MODEL_PACKAGE = "classy.model";
+    private static final String CLASSY_DTO_PACKAGE = "classy.dto";
     //   public static String[] exclude;
     String URL;
     String SCHEMA; //extract schema from URL
@@ -191,7 +193,7 @@ public class ClasslessProcessor extends AbstractProcessor {
                             bufferedWriter.append("@JsonIgnore");
                             bufferedWriter.newLine();
                         }
-                        bufferedWriter.append("private " + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), true) + ";");
+                        bufferedWriter.append("private " + CLASSY_MODEL_PACKAGE + "." + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
                     case "ManyToOne":
@@ -201,7 +203,7 @@ public class ClasslessProcessor extends AbstractProcessor {
                             bufferedWriter.append("@JoinColumn(name = \"" + foreignKeyMetaData.getColumnName() + "\")");
                             bufferedWriter.newLine();
                         }
-                        bufferedWriter.append("private " + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), true) + ";");
+                        bufferedWriter.append("private " + CLASSY_MODEL_PACKAGE + "." + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
                     case "OneToMany":
@@ -209,7 +211,7 @@ public class ClasslessProcessor extends AbstractProcessor {
                             bufferedWriter.append("@OneToMany(mappedBy =\"" + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), false) + "\")");
                             bufferedWriter.newLine();
                         }
-                        bufferedWriter.append("private List<" + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getTableName()) + "> " +
+                        bufferedWriter.append("private List<" + CLASSY_MODEL_PACKAGE + "." + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getTableName()) + "> " +
                                 StringUtils.transferColumnNameIntoPluralFieldName(foreignKeyMetaData.getTableName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
@@ -223,7 +225,7 @@ public class ClasslessProcessor extends AbstractProcessor {
                             bufferedWriter.newLine();
 
                         }
-                        bufferedWriter.append("private List<" + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "> " +
+                        bufferedWriter.append("private List<" + CLASSY_MODEL_PACKAGE + "." + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "> " +
                                                                     StringUtils.transferColumnNameIntoPluralFieldName(foreignKeyMetaData.getTableName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
@@ -252,7 +254,7 @@ public class ClasslessProcessor extends AbstractProcessor {
             String dataType = resultSet.getString("DATA_TYPE").toUpperCase();
             String columnKey = resultSet.getString("COLUMN_KEY");
 
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "Name: " + columnName + ", Type: " + dataType);
+          //  processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "Name: " + columnName + ", Type: " + dataType);
 
             String columnJavaType = determineType(dataType);
             if (columnKey.equals("PRI")) {
@@ -359,12 +361,12 @@ public class ClasslessProcessor extends AbstractProcessor {
                 switch (relationshipType) {
                     case "OneToOne":
                     case "ManyToOne":
-                        bufferedWriter.append("private " + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "DTO" + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), true) + ";");
+                        bufferedWriter.append("private " + CLASSY_DTO_PACKAGE + "." + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "DTO" + " " + StringUtils.transferColumnNameIntoFieldName(foreignKeyMetaData.getColumnName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
                     case "OneToMany":
                     case "ManyToMany":
-                        bufferedWriter.append("private List<" + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "DTO" + "> " +
+                        bufferedWriter.append("private List<" +CLASSY_DTO_PACKAGE + "." + StringUtils.transferTableNameIntoClassName(foreignKeyMetaData.getReferencedTableName()) + "DTO" + "> " +
                                 StringUtils.transferColumnNameIntoPluralFieldName(foreignKeyMetaData.getTableName(), true) + ";");
                         bufferedWriter.newLine();
                         break;
@@ -378,7 +380,7 @@ public class ClasslessProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return new HashSet<>(Arrays.asList("com.classless.annotations.GenerateModel"));
+        return new HashSet<>(Arrays.asList("com.classy.annotations.GenerateModel"));
     }
 
     @Override
