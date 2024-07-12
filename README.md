@@ -1,6 +1,6 @@
 # Java Classy Version 0.1
 
-**Java Classy** is a Java library designed to generate model and DTO classes based on your Database Model that you can then use within your runtime. Packages where you can find these classes are named classy.model and classy.dto respectively.
+**Java Classy** is a Java library designed to generate model and DTO classes based on your Database Model that you can then use within your runtime. Packages where you can find these classes are named classy.model and classy.dto respectively. Currently this library only supports MySQL databases.
 
 
 ## Getting Started
