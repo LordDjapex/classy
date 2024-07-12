@@ -32,7 +32,11 @@ db.password=<DB_PASSWORD>
 classy.annotateJPA=<Boolean value>
 classy.generateDTOs=<Boolean value>
 ```
+
 annotateJPA - If this parameter is set to true, your model classes will get annotated with JPA annotations
 
 generateDTOs - If this parameter is set to true, alongside your model classes, you will have DTO representatives of these models as well, located within classy.dto package upon run time. 
 generate Github markdown for this please
+
+### Code Setup
+In order to use this library, not much of code setup is required. Just annotate your main class with @GenerateModel annotation and it should generate code fine.
