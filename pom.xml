@@ -4,9 +4,10 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.classy</groupId>
+    <groupId>io.github.lorddjapex</groupId>
     <artifactId>classy</artifactId>
     <version>0.1</version>
+    <packaging>jar</packaging>
     <properties>
         <maven.compiler.source>22</maven.compiler.source>
         <maven.compiler.target>22</maven.compiler.target>
@@ -14,6 +15,7 @@
     </properties>
 
     <name>Java Classy</name>
+    <url>http://https://github.com/LordDjapex/classy</url>
     <description>Java Classy is a Java library designed to generate model and DTO classes based on your Database Model that you can then use within your runtime.</description>
 
     <scm>
@@ -65,7 +67,7 @@
                 <configuration>
                     <annotationProcessorPaths>
                         <path>
-                            <groupId>com.classy</groupId>
+                            <groupId>io.github.lorddjapex</groupId>
                             <artifactId>classy</artifactId>
                             <version>0.1</version>
                         </path>
@@ -112,6 +114,20 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>2.8.2</version>
+                <executions>
+                    <execution>
+                        <id>default-deploy</id>
+                        <phase>deploy</phase>
+                        <goals>
+                            <goal>deploy</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
@@ -125,6 +141,19 @@
             <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
         </repository>
     </distributionManagement>
+
+    <developers>
+        <developer>
+            <id>Djapex</id>
+            <name>Nikola Pudja</name>
+            <email>nikolapudja@gmail.com</email>
+            <url>https://github.com/LordDjapex/classy</url>
+            <roles>
+                <role>developer</role>
+            </roles>
+            <timezone>+1</timezone>
+        </developer>
+    </developers>
 
 
 
