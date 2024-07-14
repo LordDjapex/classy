@@ -12,14 +12,14 @@ To start using Java Classy, add the following dependency to your `pom.xml` or `b
 #### Maven
 ```xml
 <dependency>
-    <groupId>com.example</groupId>
-    <artifactId>java-classy</artifactId>
+    <groupId>io.github.lorddjapex</groupId>
+    <artifactId>classy</artifactId>
     <version>0.1</version>
 </dependency>
 ```
 ### Gradle
 ```xml
-implementation 'com.example:java-classy:0.1'
+implementation group: 'io.github.lorddjapex', name: 'classy', version: '0.1'
 ```
 
 ### Configuration:
