@@ -68,4 +68,11 @@ public class StringUtils {
     public static String transferColumnNameIntoPluralFieldName(String columnName, boolean isForeignColumn) {
         return transferColumnNameIntoFieldName(columnName, isForeignColumn) + "s";
     }
+
+    public static String lowercaseFirstLetter(String str) {
+        if (str == null || str.isEmpty()) {
+            return str; // Return the original string if it's null or empty
+        }
+        return str.substring(0, 1).toLowerCase() + str.substring(1);
+    }
 }

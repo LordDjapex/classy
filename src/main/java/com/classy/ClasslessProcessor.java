@@ -3,6 +3,7 @@ package com.classy;
 import com.classy.annotations.GenerateModel;
 import com.classy.enums.SqlColumnTypes;
 import com.classy.template.ForeignKeyMetaData;
+import com.classy.utils.FileSystemUtils;
 import com.classy.utils.QueryUtils;
 import com.classy.utils.StringUtils;
 
@@ -11,10 +12,15 @@ import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
+import javax.tools.FileObject;
 import javax.tools.JavaFileObject;
+import javax.tools.StandardLocation;
 import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Writer;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -30,6 +36,8 @@ import java.util.Properties;
 import java.util.Set;
 
 import static com.classy.mapper.SqlTypeMapper.mapSqlTypeToJavaType;
+import static com.classy.utils.Constants.tableLowercasePlaceholder;
+import static com.classy.utils.Constants.tablePlaceholder;
 
 public class ClasslessProcessor extends AbstractProcessor {
 
@@ -47,7 +55,34 @@ public class ClasslessProcessor extends AbstractProcessor {
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "TEST WARNING");
+        try {
+            // Specify the file name and path in the source output location
+            String packageName = "com.example.generated";
+            String fileName = "GeneratedClass.java";
 
+            // Create a source file in the SOURCE_OUTPUT location
+            FileObject sourceFile = processingEnv.getFiler().createResource(
+                    StandardLocation.SOURCE_OUTPUT, packageName, fileName);
+
+            // Write the content of the generated class
+            try (Writer writer = sourceFile.openWriter()) {
+                writer.write("package " + packageName + ";\n\n");
+                writer.write("public class GeneratedClass {\n");
+                writer.write("    public static void sayHello() {\n");
+                writer.write("        System.out.println(\"Hello from GeneratedClass!\");\n");
+                writer.write("    }\n");
+                writer.write("}\n");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        for (StandardLocation location : StandardLocation.values()) {
+
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Name: " + location.getName());
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Is Output Location: " + location.isOutputLocation());
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "Is Module-Oriented Location: " + location.isModuleOrientedLocation());
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, "-------------------------");
+        }
         if (!roundEnv.getElementsAnnotatedWith(GenerateModel.class).isEmpty()) {
             try {
                 java.lang.Class.forName("com.mysql.cj.jdbc.Driver");
@@ -73,15 +108,21 @@ public class ClasslessProcessor extends AbstractProcessor {
                 PreparedStatement tableStatement = QueryUtils.extractTablesStatement(connection, SCHEMA);
                 ResultSet tablesResultSet = tableStatement.executeQuery();
 
+                List<String> templateSegments = FileSystemUtils.readAndSplitTemplate();
+
                 while (tablesResultSet.next()) {
                     String tableName = tablesResultSet.getString("TABLE_NAME");
                     PreparedStatement preparedStatement = QueryUtils.extractTableColumns(connection, SCHEMA, tableName);
                     ResultSet resultSet = preparedStatement.executeQuery();
                     createClass(tableName, resultSet);
+                    for (String templateSegment: templateSegments) {
+                        processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"Writing template:" + templateSegment);
+                        writeTemplateSegment(tableName, resultSet, templateSegment);
+                    }
                 }
 
             } catch (Exception e) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,"Cannot connect the database!");
+              //  processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,"Cannot connect the database!");
                 processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,e.toString());
                 return false;
             } finally {
@@ -99,6 +140,43 @@ public class ClasslessProcessor extends AbstractProcessor {
             return true;
     }
 
+    private void writeTemplateSegment(String name, ResultSet resultSet, String templateSegment) throws Exception {
+        HashMap<String, String> placeholderMap = new HashMap<>();
+        String className = StringUtils.transferTableNameIntoClassName(name);
+
+        placeholderMap.put(tablePlaceholder, className);
+        placeholderMap.put(tableLowercasePlaceholder, StringUtils.lowercaseFirstLetter(className));
+
+        String packageName = templateSegment.split("\\R")[0].replace("package ", "");
+
+        String classContent = templateSegment;
+        for (Map.Entry<String, String> entry : placeholderMap.entrySet()) {
+            classContent = classContent.replace(entry.getKey(), entry.getValue());
+        }
+
+        String packagePath = packageName.replace('.', '/').replace(";", "");
+        String projectDir = System.getProperty("user.dir");
+        File packageDir = new File(projectDir, "src/main/java/" + packagePath);
+
+        // Create the directories if they don't exist
+        if (!packageDir.exists()) {
+            if (!packageDir.mkdirs()) {
+                throw new IOException("Failed to create package directory: " + packageDir.getAbsolutePath());
+            }
+        }
+
+        // Define the file path for the Java class
+        File javaFile = new File(packageDir, className + ".java");
+
+
+        // Write the class content to the file
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"Writing file: " + javaFile.getPath());
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"User dir: " + System.getProperty("user.dir"));
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,"Writing file: " + javaFile.getAbsolutePath());
+        try (FileWriter writer = new FileWriter(javaFile)) {
+            writer.write(classContent);
+        }
+    }
     private JavaFileObject createClass(String name, ResultSet resultSet) throws IOException, SQLException {
         JavaFileObject ourClass = null;
         BufferedWriter bufferedWriter = null;
