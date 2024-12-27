@@ -11,4 +11,11 @@ public class Constants {
     //Placeholders
     public static String tablePlaceholder = "[TABLE]";
     public static String tableLowercasePlaceholder = "[TABLE_LOWERCASE]";
+    public static String tablePluralPlaceholder = "[TABLE_PLURAL]";
+
+    //Configurations
+
+
+    //Exceptions
+    public static String CLASS_NAME_NOT_FOUND_EXCEPTION = "#ClassName tag not found";
 }

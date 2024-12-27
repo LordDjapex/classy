@@ -66,7 +66,24 @@ public class StringUtils {
     }
 
     public static String transferColumnNameIntoPluralFieldName(String columnName, boolean isForeignColumn) {
-        return transferColumnNameIntoFieldName(columnName, isForeignColumn) + "s";
+        String singular = transferColumnNameIntoFieldName(columnName, isForeignColumn);
+
+        // Basic pluralization without regex
+        if (singular.endsWith("s") || singular.endsWith("x") || singular.endsWith("z") ||
+                singular.endsWith("ch") || singular.endsWith("sh")) {
+            return singular + "es";
+        } else if (singular.endsWith("y") && isConsonantBeforeY(singular)) {
+            return singular.substring(0, singular.length() - 1) + "ies";
+        } else {
+            return singular + "s";
+        }
+    }
+
+    // Helper method to check if 'y' has a consonant before it
+    private static boolean isConsonantBeforeY(String word) {
+        if (word.length() < 2) return false;
+        char beforeY = word.charAt(word.length() - 2);
+        return !"aeiou".contains(String.valueOf(beforeY).toLowerCase());
     }
 
     public static String lowercaseFirstLetter(String str) {
